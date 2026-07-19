@@ -33,6 +33,8 @@ http://<ubuntu-host>:3010/system?embed=1
 
 Single-module iframe routes automatically use a compact layout without the Systemarr header. The CPU route adjusts its gauge, core grid, and chart to the available widget size and hides the chart only in very short iframes.
 
+The RAM card uses a compact utilization gauge and shows used, total, available, and swap memory. When the host exposes module information through SMBIOS/DMI or EDAC, it also shows the RAM manufacturer, part number, type, capacity, speed, and slot where available. Hardware fields that Linux does not expose are omitted instead of being guessed.
+
 The `/ram` and `/storage` aliases are also available. `/overview` opens the complete dashboard.
 
 Use **Modules** to show or hide individual cards. The selection is stored in the browser. For a fixed iframe configuration, modules can also be specified in the URL:

@@ -102,8 +102,24 @@ function render(data) {
   });
   pushHistory(state.cpuHistory, cpu); chart($("#cpuChart"), state.cpuHistory);
 
-  $("#memoryPercent").textContent = `${number(data.memory.usage, 0)}%`; $("#memoryBar").style.width = `${clamp(data.memory.usage)}%`;
-  $("#memoryUsed").textContent = bytes(data.memory.used); $("#memoryFree").textContent = bytes(data.memory.available);
+  const memoryUsage = clamp(data.memory.usage);
+  $("#memoryPercent").textContent = number(memoryUsage, 0); $("#memoryGauge").style.setProperty("--value", `${memoryUsage * 3.6}deg`);
+  $("#memoryBar").style.width = `${memoryUsage}%`; $("#memoryUsed").textContent = bytes(data.memory.used); $("#memoryFree").textContent = bytes(data.memory.available);
+  $("#memoryTotal").textContent = `of ${bytes(data.memory.total)} total`;
+  const memoryModules = data.memory.hardware?.modules || []; const memoryTypes = [...new Set(memoryModules.map((module) => module.type).filter(Boolean))];
+  $("#memoryType").textContent = memoryModules.length
+    ? `${memoryTypes.join("/") || "RAM"} · ${memoryModules.length} ${memoryModules.length === 1 ? "Module" : "Modules"}`
+    : "Memory";
+  const memoryHardware = $("#memoryHardware"); memoryHardware.replaceChildren(); memoryHardware.hidden = !memoryModules.length;
+  memoryHardware.title = data.memory.hardware?.source ? `Hardware information from ${data.memory.hardware.source}` : "";
+  memoryModules.forEach((module, index) => {
+    const item = document.createElement("div"); item.innerHTML = "<strong></strong><small></small>";
+    const product = [module.manufacturer, module.partNumber].filter(Boolean).join(" ");
+    item.querySelector("strong").textContent = product || module.label || `Module ${index + 1}`;
+    const details = [module.size ? bytes(module.size) : "", module.type, module.speedMTs ? `${number(module.speedMTs, 0)} MT/s` : "", product ? module.label : "", module.deviceType].filter(Boolean);
+    item.querySelector("small").textContent = details.join(" · ");
+    memoryHardware.append(item);
+  });
   $("#swapRow").hidden = !data.memory.swapTotal; $("#swapValue").textContent = `${bytes(data.memory.swapUsed)} / ${bytes(data.memory.swapTotal)}`;
 
   $("#loadOne").textContent = number(data.load.one, 2); $("#loadFive").textContent = number(data.load.five, 2); $("#loadFifteen").textContent = number(data.load.fifteen, 2);
