@@ -18,9 +18,19 @@ interface CpuTimes { idle: number; total: number }
 interface CpuSnapshot extends CpuTimes { cores: CpuTimes[] }
 interface NetworkSnapshot { received: number; transmitted: number; at: number }
 interface TemperatureSensor { label: string; celsius: number; source: string; category: string }
+interface MemoryModule {
+  label: string;
+  manufacturer?: string;
+  partNumber?: string;
+  type?: string;
+  size?: number;
+  speedMTs?: number;
+  deviceType?: string;
+}
 
 let previousCpu: CpuSnapshot | undefined;
 let previousNetwork: NetworkSnapshot | undefined;
+let memoryHardwareCache: Promise<{ source?: string; modules: MemoryModule[] }> | undefined;
 
 const contentTypes: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -40,6 +50,11 @@ function json(response: ServerResponse, status: number, body: unknown): void {
 
 async function readText(path: string): Promise<string | undefined> {
   try { return await readFile(path, "utf8"); } catch { return undefined; }
+}
+
+function usefulHardwareString(value: string | undefined): string | undefined {
+  const cleaned = value?.replace(/\s+/g, " ").trim();
+  return cleaned && !/^(?:unknown|not specified|none|no dimm|n\/a|0+)$/i.test(cleaned) ? cleaned : undefined;
 }
 
 function percentage(value: number, maximum: number): number {
@@ -141,11 +156,11 @@ async function cpuMetrics() {
 }
 
 async function memoryMetrics() {
-  const info = await readText(join(procRoot, "meminfo"));
+  const [info, hardware] = await Promise.all([readText(join(procRoot, "meminfo")), memoryHardware()]);
   if (!info) {
     const total = totalmem();
     const available = freemem();
-    return { total, used: total - available, available, usage: percentage(total - available, total), swapTotal: 0, swapUsed: 0 };
+    return { total, used: total - available, available, usage: percentage(total - available, total), swapTotal: 0, swapUsed: 0, hardware };
   }
   const values = new Map<string, number>();
   for (const line of info.split("\n")) {
@@ -156,7 +171,93 @@ async function memoryMetrics() {
   const available = values.get("MemAvailable") ?? values.get("MemFree") ?? 0;
   const swapTotal = values.get("SwapTotal") ?? 0;
   const swapFree = values.get("SwapFree") ?? 0;
-  return { total, used: total - available, available, usage: percentage(total - available, total), swapTotal, swapUsed: swapTotal - swapFree };
+  return { total, used: total - available, available, usage: percentage(total - available, total), swapTotal, swapUsed: swapTotal - swapFree, hardware };
+}
+
+const dmiMemoryTypes: Record<number, string> = {
+  18: "DDR", 19: "DDR2", 20: "DDR2 FB-DIMM", 24: "DDR3", 26: "DDR4",
+  27: "LPDDR", 28: "LPDDR2", 29: "LPDDR3", 30: "LPDDR4", 34: "DDR5", 35: "LPDDR5",
+};
+
+function parseDmiMemoryModule(raw: Buffer, index: number): MemoryModule | undefined {
+  if (raw.length < 0x1b || raw[0] !== 17) return undefined;
+  const formattedLength = raw[1];
+  if (formattedLength < 0x1b || raw.length < formattedLength) return undefined;
+  const strings = raw.subarray(formattedLength).toString("utf8").split("\0");
+  const stringAt = (offset: number) => {
+    const stringIndex = raw[offset] ?? 0;
+    return stringIndex > 0 ? usefulHardwareString(strings[stringIndex - 1]) : undefined;
+  };
+
+  const sizeValue = raw.readUInt16LE(0x0c);
+  if (sizeValue === 0) return undefined;
+  let size: number | undefined;
+  if (sizeValue === 0x7fff && formattedLength >= 0x20) size = raw.readUInt32LE(0x1c) * 1024 * 1024;
+  else if (sizeValue !== 0xffff) size = (sizeValue & 0x7fff) * ((sizeValue & 0x8000) ? 1024 : 1024 * 1024);
+
+  const configuredSpeed = formattedLength >= 0x22 ? raw.readUInt16LE(0x20) : 0;
+  const ratedSpeed = formattedLength >= 0x17 ? raw.readUInt16LE(0x15) : 0;
+  const speed = configuredSpeed && configuredSpeed !== 0xffff ? configuredSpeed : ratedSpeed && ratedSpeed !== 0xffff ? ratedSpeed : undefined;
+  return {
+    label: stringAt(0x10) ?? stringAt(0x11) ?? `Module ${index + 1}`,
+    manufacturer: stringAt(0x17),
+    partNumber: stringAt(0x1a),
+    type: dmiMemoryTypes[raw[0x12]],
+    size,
+    speedMTs: speed,
+  };
+}
+
+async function dmiMemoryModules(): Promise<MemoryModule[]> {
+  const entriesRoot = join(sysRoot, "firmware", "dmi", "entries");
+  try {
+    const entries = (await readdir(entriesRoot)).filter((name) => /^17-\d+$/.test(name));
+    const modules = await Promise.all(entries.map(async (entry, index) => {
+      try { return parseDmiMemoryModule(await readFile(join(entriesRoot, entry, "raw")), index); }
+      catch { return undefined; }
+    }));
+    return modules.filter((module): module is MemoryModule => module !== undefined);
+  } catch { return []; }
+}
+
+async function edacMemoryModules(): Promise<MemoryModule[]> {
+  const controllersRoot = join(sysRoot, "devices", "system", "edac", "mc");
+  try {
+    const controllers = (await readdir(controllersRoot)).filter((name) => /^mc\d+$/.test(name));
+    const modules: MemoryModule[] = [];
+    for (const controller of controllers) {
+      const controllerRoot = join(controllersRoot, controller);
+      const entries = (await readdir(controllerRoot)).filter((name) => /^(?:dimm|rank)\d+$/.test(name));
+      for (const entry of entries) {
+        const base = join(controllerRoot, entry);
+        const [sizeRaw, labelRaw, locationRaw, typeRaw, deviceTypeRaw] = await Promise.all([
+          readText(join(base, "size")), readText(join(base, "dimm_label")), readText(join(base, "dimm_location")),
+          readText(join(base, "dimm_mem_type")), readText(join(base, "dimm_dev_type")),
+        ]);
+        const sizeMb = Number(sizeRaw?.trim());
+        if (!Number.isFinite(sizeMb) || sizeMb <= 0) continue;
+        modules.push({
+          label: usefulHardwareString(labelRaw) ?? usefulHardwareString(locationRaw) ?? `${controller} ${entry}`,
+          type: usefulHardwareString(typeRaw)?.replace(/^MEM_/, ""),
+          deviceType: usefulHardwareString(deviceTypeRaw),
+          size: sizeMb * 1024 * 1024,
+        });
+      }
+    }
+    return modules;
+  } catch { return []; }
+}
+
+async function discoverMemoryHardware() {
+  const dmiModules = await dmiMemoryModules();
+  if (dmiModules.length) return { source: "DMI", modules: dmiModules };
+  const edacModules = await edacMemoryModules();
+  return { source: edacModules.length ? "EDAC" : undefined, modules: edacModules };
+}
+
+function memoryHardware() {
+  memoryHardwareCache ??= discoverMemoryHardware();
+  return memoryHardwareCache;
 }
 
 async function loadMetrics() {
