@@ -77,6 +77,12 @@ function pushHistory(list, value) { list.push(value); if (list.length > 40) list
 function render(data) {
   const cpu = clamp(data.cpu.usage);
   $("#cpuValue").textContent = number(cpu, 0); $("#cpuBadge").textContent = `${data.cpu.cores} Kerne`; $("#cpuModel").textContent = data.cpu.model;
+  const cpuFrequency = $("#cpuFrequency"); const frequencyParts = [];
+  if (data.cpu.frequency?.currentGHz !== undefined) frequencyParts.push(`Aktuell ${number(data.cpu.frequency.currentGHz, 2)} GHz`);
+  if (data.cpu.frequency?.minGHz !== undefined && data.cpu.frequency?.maxGHz !== undefined) {
+    frequencyParts.push(`Bereich ${number(data.cpu.frequency.minGHz, 2)}–${number(data.cpu.frequency.maxGHz, 2)} GHz`);
+  } else if (data.cpu.frequency?.maxGHz !== undefined) frequencyParts.push(`Max. ${number(data.cpu.frequency.maxGHz, 2)} GHz`);
+  cpuFrequency.textContent = frequencyParts.join(" · "); cpuFrequency.hidden = !frequencyParts.length;
   $("#cpuState").textContent = cpu > 85 ? "Hohe Auslastung" : cpu > 55 ? "Gut beschäftigt" : "Läuft entspannt";
   $("#cpuGauge").style.setProperty("--value", `${cpu * 3.6}deg`);
   const coreList = $("#cpuCores"); coreList.replaceChildren();
@@ -101,12 +107,13 @@ function render(data) {
   if (!data.disks.length) diskList.innerHTML = '<p class="empty">Keine Datenträger gefunden</p>';
   data.disks.forEach((disk) => {
     const item = document.createElement("div"); item.className = "disk-item";
-    item.innerHTML = `<div class="disk-top"><div><strong></strong><span></span></div><b></b></div><div class="bar"><i></i></div><small></small>`;
-    item.querySelector("strong").textContent = disk.mount === "/" ? "System" : disk.mount;
-    item.querySelector("span").textContent = `${disk.device} · ${disk.fs}`;
+    item.innerHTML = `<div class="disk-top"><div><strong class="disk-mount"></strong><span class="disk-name"></span><small class="disk-source"></small></div><b></b></div><div class="bar"><i></i></div><small class="disk-usage"></small>`;
+    item.querySelector(".disk-mount").textContent = disk.mount === "/" ? "System" : disk.mount;
+    item.querySelector(".disk-name").textContent = disk.name || disk.device;
+    item.querySelector(".disk-source").textContent = `${disk.fs === "zfs" ? "Dataset " : ""}${disk.device} · ${disk.fs}`;
     item.querySelector("b").textContent = `${number(disk.usage, 0)}%`;
     item.querySelector("i").style.width = `${clamp(disk.usage)}%`;
-    item.querySelector("small").textContent = `${bytes(disk.used)} von ${bytes(disk.total)} belegt · ${bytes(disk.available)} frei`;
+    item.querySelector(".disk-usage").textContent = `${bytes(disk.used)} von ${bytes(disk.total)} belegt · ${bytes(disk.available)} frei`;
     diskList.append(item);
   });
 
@@ -133,9 +140,13 @@ function render(data) {
   (data.fans || []).forEach((sensor) => {
     const item = document.createElement("div"); item.innerHTML = `<span class="sensor-copy"><strong></strong><small></small></span><b></b>`;
     item.querySelector("strong").textContent = sensor.label;
-    item.querySelector("small").textContent = sensor.source;
+    const details = [sensor.source];
+    if (sensor.minRpm !== undefined && sensor.maxRpm !== undefined) details.push(`${number(sensor.minRpm, 0)}–${number(sensor.maxRpm, 0)} RPM`);
+    else if (sensor.maxRpm !== undefined) details.push(`Max. ${number(sensor.maxRpm, 0)} RPM`);
+    else if (sensor.minRpm !== undefined) details.push(`Min. ${number(sensor.minRpm, 0)} RPM`);
+    if (sensor.percent !== undefined) details.push(`${number(sensor.percent, 0)} %`);
+    item.querySelector("small").textContent = details.join(" · ");
     item.querySelector("b").textContent = `${number(sensor.rpm, 0)} RPM`;
-    item.classList.toggle("stopped", sensor.rpm === 0);
     fans.append(item);
   });
 

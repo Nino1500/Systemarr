@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <title>Systemarr</title>
-    <link rel="stylesheet" href="/styles.css?v=1" />
+    <link rel="stylesheet" href="/styles.css?v=2" />
   </head>
   <body>
     <div class="glow glow-a"></div><div class="glow glow-b"></div>
@@ -30,7 +30,7 @@
       <section id="dashboard" class="dashboard" aria-live="polite">
         <article class="card hero-card" data-module="cpu">
           <div class="card-heading"><div><span class="eyebrow">Prozessor</span><h2>CPU</h2></div><span id="cpuBadge" class="badge">– Kerne</span></div>
-          <div class="gauge-row"><div class="gauge" id="cpuGauge"><div><strong id="cpuValue">–</strong><small>%</small></div></div><div class="metric-copy"><strong id="cpuState">Wird geladen</strong><span id="cpuModel">CPU</span></div></div>
+          <div class="gauge-row"><div class="gauge" id="cpuGauge"><div><strong id="cpuValue">–</strong><small>%</small></div></div><div class="metric-copy"><strong id="cpuState">Wird geladen</strong><span id="cpuModel">CPU</span><span id="cpuFrequency" class="cpu-frequency" hidden></span></div></div>
           <div id="cpuCores" class="cpu-cores" aria-label="Auslastung der CPU-Kerne"></div>
           <div id="cpuChart" class="chart" aria-label="CPU-Verlauf"></div>
         </article>
@@ -76,6 +76,6 @@
       </section>
       <footer><span id="lastUpdated">Noch keine Daten</span><span>Systemarr</span></footer>
     </main>
-    <script src="/app.js?v=1" defer></script>
+    <script src="/app.js?v=2" defer></script>
   </body>
 </html>
