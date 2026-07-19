@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -17,65 +17,65 @@
         </div>
         <div class="header-actions">
           <span id="liveStatus" class="live"><i></i> Live</span>
-          <button id="layoutButton" class="icon-button" aria-label="Anzeigen auswählen" aria-expanded="false">☷ <span>Anzeigen</span></button>
-          <button id="refreshButton" class="icon-button" aria-label="Aktualisieren">↻</button>
+          <button id="layoutButton" class="icon-button" aria-label="Select modules" aria-expanded="false">☷ <span>Modules</span></button>
+          <button id="refreshButton" class="icon-button" aria-label="Refresh">↻</button>
         </div>
         <div id="layoutPanel" class="layout-panel" hidden>
-          <strong>Anzeigen</strong><p>Wähle die Kacheln für dein Dashboard.</p>
+          <strong>Modules</strong><p>Choose the cards shown on your dashboard.</p>
           <div id="moduleChoices"></div>
-          <button id="resetLayout" class="reset-button">Standard wiederherstellen</button>
+          <button id="resetLayout" class="reset-button">Restore defaults</button>
         </div>
       </header>
 
       <section id="dashboard" class="dashboard" aria-live="polite">
         <article class="card hero-card" data-module="cpu">
-          <div class="card-heading"><div><span class="eyebrow">Prozessor</span><h2>CPU</h2></div><span id="cpuBadge" class="badge">– Kerne</span></div>
-          <div class="gauge-row"><div class="gauge" id="cpuGauge"><div><strong id="cpuValue">–</strong><small>%</small></div></div><div class="metric-copy"><strong id="cpuState">Wird geladen</strong><span id="cpuModel">CPU</span><span id="cpuFrequency" class="cpu-frequency" hidden></span></div></div>
-          <div id="cpuCores" class="cpu-cores" aria-label="Auslastung der CPU-Kerne"></div>
-          <div id="cpuChart" class="chart" aria-label="CPU-Verlauf"></div>
+          <div class="card-heading"><div><span class="eyebrow">Processor</span><h2>CPU</h2></div><span id="cpuBadge" class="badge">– Cores</span></div>
+          <div class="gauge-row"><div class="gauge" id="cpuGauge"><div><strong id="cpuValue">–</strong><small>%</small></div></div><div class="metric-copy"><strong id="cpuState">Loading</strong><span id="cpuModel">CPU</span><span id="cpuFrequency" class="cpu-frequency" hidden></span></div></div>
+          <div id="cpuCores" class="cpu-cores" aria-label="CPU core utilization"></div>
+          <div id="cpuChart" class="chart" aria-label="CPU history"></div>
         </article>
 
         <article class="card" data-module="memory">
-          <div class="card-heading"><div><span class="eyebrow">Arbeitsspeicher</span><h2>RAM</h2></div><span id="memoryPercent" class="metric-percent">–%</span></div>
+          <div class="card-heading"><div><span class="eyebrow">Memory</span><h2>RAM</h2></div><span id="memoryPercent" class="metric-percent">–%</span></div>
           <div class="bar"><i id="memoryBar"></i></div>
-          <div class="split"><div><span>Belegt</span><strong id="memoryUsed">–</strong></div><div><span>Verfügbar</span><strong id="memoryFree">–</strong></div></div>
+          <div class="split"><div><span>Used</span><strong id="memoryUsed">–</strong></div><div><span>Available</span><strong id="memoryFree">–</strong></div></div>
           <div id="swapRow" class="submetric"><span>Swap</span><strong id="swapValue">–</strong></div>
         </article>
 
         <article class="card load-card" data-module="load">
-          <div class="card-heading"><div><span class="eyebrow">Systemlast</span><h2>Load Average</h2></div><span class="pulse-icon">⌁</span></div>
-          <div class="load-values"><div><strong id="loadOne">–</strong><span>1 Min.</span></div><div><strong id="loadFive">–</strong><span>5 Min.</span></div><div><strong id="loadFifteen">–</strong><span>15 Min.</span></div></div>
+          <div class="card-heading"><div><span class="eyebrow">System Load</span><h2>Load Average</h2></div><span class="pulse-icon">⌁</span></div>
+          <div class="load-values"><div><strong id="loadOne">–</strong><span>1 min</span></div><div><strong id="loadFive">–</strong><span>5 min</span></div><div><strong id="loadFifteen">–</strong><span>15 min</span></div></div>
           <div class="load-footer"><span>Uptime</span><strong id="uptimeValue">–</strong></div>
         </article>
 
         <article class="card wide" data-module="disks">
-          <div class="card-heading"><div><span class="eyebrow">Speicher</span><h2>Festplatten</h2></div><span id="diskCount" class="badge">– Volumes</span></div>
-          <div id="diskList" class="disk-list"><p class="empty">Datenträger werden geladen …</p></div>
+          <div class="card-heading"><div><span class="eyebrow">Storage</span><h2>Disks</h2></div><span id="diskCount" class="badge">– Volumes</span></div>
+          <div id="diskList" class="disk-list"><p class="empty">Loading disks …</p></div>
         </article>
 
         <article class="card network-card" data-module="network">
-          <div class="card-heading"><div><span class="eyebrow">Durchsatz</span><h2>Netzwerk</h2></div><span class="pulse-icon">⇅</span></div>
+          <div class="card-heading"><div><span class="eyebrow">Throughput</span><h2>Network</h2></div><span class="pulse-icon">⇅</span></div>
           <div class="network-values"><div><span><i class="down">↓</i> Download</span><strong id="downloadValue">–</strong></div><div><span><i class="up">↑</i> Upload</span><strong id="uploadValue">–</strong></div></div>
           <div id="networkChart" class="chart network-chart"></div>
         </article>
 
         <article class="card" data-module="temperature">
-          <div class="card-heading"><div><span class="eyebrow">Sensoren</span><h2>Temperaturen</h2></div><span id="temperatureCount" class="badge">– Sensoren</span></div>
-          <div id="temperatureList" class="sensor-list"><p class="empty">Keine Sensorwerte</p></div>
+          <div class="card-heading"><div><span class="eyebrow">Sensors</span><h2>Temperatures</h2></div><span id="temperatureCount" class="badge">– Sensors</span></div>
+          <div id="temperatureList" class="sensor-list"><p class="empty">No sensor values</p></div>
         </article>
 
         <article class="card" data-module="fans">
-          <div class="card-heading"><div><span class="eyebrow">Kühlung</span><h2>Lüfter</h2></div><span id="fanCount" class="badge">– Lüfter</span></div>
-          <div id="fanList" class="sensor-list"><p class="empty">Keine Lüfter gefunden</p></div>
+          <div class="card-heading"><div><span class="eyebrow">Cooling</span><h2>Fans</h2></div><span id="fanCount" class="badge">– Fans</span></div>
+          <div id="fanList" class="sensor-list"><p class="empty">No fans found</p></div>
         </article>
 
         <article class="card system-card" data-module="system">
           <div class="card-heading"><div><span class="eyebrow">Host</span><h2>System</h2></div><span class="pulse-icon">⌘</span></div>
-          <dl><div><dt>Hostname</dt><dd id="systemHost">–</dd></div><div><dt>Betriebssystem</dt><dd id="systemOs">–</dd></div><div><dt>Kernel</dt><dd id="systemKernel">–</dd></div></dl>
+          <dl><div><dt>Hostname</dt><dd id="systemHost">–</dd></div><div><dt>Operating System</dt><dd id="systemOs">–</dd></div><div><dt>Kernel</dt><dd id="systemKernel">–</dd></div></dl>
         </article>
       </section>
-      <footer><span id="lastUpdated">Noch keine Daten</span><span>Systemarr</span></footer>
+      <footer><span id="lastUpdated">No data yet</span><span>Systemarr</span></footer>
     </main>
-    <script src="/app.js?v=2" defer></script>
+    <script src="/app.js?v=3" defer></script>
   </body>
 </html>
