@@ -17,6 +17,7 @@ const dashboardRoutes = new Set([
 interface CpuTimes { idle: number; total: number }
 interface CpuSnapshot extends CpuTimes { cores: CpuTimes[] }
 interface NetworkSnapshot { received: number; transmitted: number; at: number }
+interface TemperatureSensor { label: string; celsius: number; source: string; category: string }
 
 let previousCpu: CpuSnapshot | undefined;
 let previousNetwork: NetworkSnapshot | undefined;
@@ -283,7 +284,7 @@ async function hwmonDeviceName(base: string, driver: string): Promise<string> {
 }
 
 async function sensorMetrics() {
-  const temperatures: Array<{ label: string; celsius: number; source: string; category: string }> = [];
+  const temperatures: TemperatureSensor[] = [];
   const fans: Array<{ label: string; rpm: number; source: string; minRpm?: number; maxRpm?: number; percent?: number }> = [];
   const hwmonRoot = join(sysRoot, "class", "hwmon");
   let hwmonDirectories: string[] = [];
@@ -363,6 +364,24 @@ async function sensorMetrics() {
   return { temperatures, fans };
 }
 
+function primaryCpuTemperature(temperatures: TemperatureSensor[]): TemperatureSensor | undefined {
+  const candidates = temperatures.flatMap((sensor) => {
+    const label = sensor.label.trim().toLowerCase();
+    const source = sensor.source.trim().toLowerCase();
+    let priority: number | undefined;
+    if (/^tdie(?:\b|\d)/.test(label)) priority = 0;
+    else if (/package id|physical id|cpu package|package temp|x86_pkg_temp/.test(label)) priority = 1;
+    else if (/^tctl(?:\b|\d)/.test(label)) priority = 2;
+    else if (/cpu[_ -]?(?:temp|thermal)|soc[_ -]?thermal/.test(label)) priority = 3;
+    else if (/x86_pkg_temp|cpu[_ -]?thermal|soc[_ -]?thermal/.test(source)) priority = 3;
+    else if (sensor.category === "cpu" && !/^core\s+\d+$/i.test(sensor.label)) priority = 4;
+    else if (sensor.category === "cpu") priority = 5;
+    return priority === undefined ? [] : [{ sensor, priority }];
+  });
+  candidates.sort((a, b) => a.priority - b.priority || b.sensor.celsius - a.sensor.celsius);
+  return candidates[0]?.sensor;
+}
+
 async function systemInfo() {
   const releaseText = await readText(join(hostRoot, "etc", "os-release")) ?? "";
   const values = Object.fromEntries(releaseText.split("\n").map((line) => {
@@ -378,7 +397,11 @@ async function collectMetrics() {
   const [cpu, memory, load, up, network, disks, sensors, system] = await Promise.all([
     cpuMetrics(), memoryMetrics(), loadMetrics(), uptimeSeconds(), networkMetrics(), diskMetrics(), sensorMetrics(), systemInfo(),
   ]);
-  return { timestamp: Date.now(), cpu, memory, load, uptime: up, network, disks, temperatures: sensors.temperatures, fans: sensors.fans, system };
+  const cpuTemperature = primaryCpuTemperature(sensors.temperatures);
+  const cpuWithTemperature = cpuTemperature
+    ? { ...cpu, temperature: { celsius: cpuTemperature.celsius, label: cpuTemperature.label, source: cpuTemperature.source } }
+    : cpu;
+  return { timestamp: Date.now(), cpu: cpuWithTemperature, memory, load, uptime: up, network, disks, temperatures: sensors.temperatures, fans: sensors.fans, system };
 }
 
 async function serveStatic(pathname: string, response: ServerResponse): Promise<void> {

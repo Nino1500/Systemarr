@@ -43,7 +43,7 @@ Available names: `cpu`, `memory`, `load`, `disks`, `network`, `temperature`, `fa
 
 Systemarr automatically discovers sensors through `/sys/class/hwmon`. Depending on the hardware, this includes CPU and motherboard temperatures, NVMe and `drivetemp` disk values, and fan speeds. `/sys/class/thermal` is used as a fallback on minimal systems.
 
-The CPU card also shows the current average frequency and, when exposed by the kernel, the maximum frequency. Disks include their hardware model, while ZFS volumes show their pool and dataset. Fans reporting 0 RPM are hidden; available minimum, maximum, and PWM values are shown as additional details.
+The CPU card also shows the current average frequency, the maximum frequency, and a representative CPU temperature. For CPU temperature, Systemarr prefers AMD `Tdie`, then Intel package temperature, then AMD `Tctl`, with other CPU sensors used only as fallbacks. Disks include their hardware model, while ZFS volumes show their pool and dataset. Fans reporting 0 RPM are hidden; available minimum, maximum, and PWM values are shown as additional details.
 
 ## Local development
 
