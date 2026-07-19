@@ -1,14 +1,14 @@
 # Systemarr
 
-Ein schlankes, iframe-freundliches Ubuntu-Dashboard für CPU, RAM, Systemlast, Festplatten, Netzwerk, Temperaturen und Systeminformationen.
+A lightweight, iframe-friendly Ubuntu dashboard for CPU, RAM, system load, disks, network, temperatures, fans, and system information.
 
-## Docker auf Ubuntu
+## Docker on Ubuntu
 
 ```sh
 docker compose up -d
 ```
 
-Compose lädt automatisch `ghcr.io/nino1500/systemarr:latest`. Danach ist Systemarr fest unter `http://<ubuntu-host>:3010` erreichbar. Eine `.env`-Datei ist nicht erforderlich. Das Host-Dateisystem wird ausschließlich lesbar (`read_only`) eingebunden. Dadurch zeigt Systemarr die Werte des Ubuntu-Hosts und nicht nur die des Containers.
+Compose automatically pulls `ghcr.io/nino1500/systemarr:latest`. Systemarr is then available at `http://<ubuntu-host>:3010`. No `.env` file is required. The host filesystem is mounted read-only (`read_only`), allowing Systemarr to display metrics from the Ubuntu host rather than only from the container.
 
 ## Iframe / Homarr
 
@@ -16,7 +16,7 @@ Compose lädt automatisch `ghcr.io/nino1500/systemarr:latest`. Danach ist System
 http://<ubuntu-host>:3010/?embed=1
 ```
 
-Jede Anzeige hat außerdem eine eigene, bildschirmfüllende Route und kann separat als iframe eingebunden werden:
+Each module also has its own full-screen route and can be embedded as a separate iframe:
 
 ```text
 http://<ubuntu-host>:3010/cpu?embed=1
@@ -29,21 +29,21 @@ http://<ubuntu-host>:3010/fans?embed=1
 http://<ubuntu-host>:3010/system?embed=1
 ```
 
-Die Kurzformen `/ram` und `/storage` funktionieren ebenfalls. `/overview` öffnet das Gesamtdashboard.
+The `/ram` and `/storage` aliases are also available. `/overview` opens the complete dashboard.
 
-Über **Anzeigen** lassen sich einzelne Kacheln ein- und ausblenden. Die Auswahl wird im Browser gespeichert. Für eine feste iframe-Konfiguration können Module auch in der URL stehen:
+Use **Modules** to show or hide individual cards. The selection is stored in the browser. For a fixed iframe configuration, modules can also be specified in the URL:
 
 ```text
 http://<ubuntu-host>:3010/?embed=1&modules=cpu,memory,disks,network
 ```
 
-Verfügbare Namen: `cpu`, `memory`, `load`, `disks`, `network`, `temperature`, `fans`, `system`.
+Available names: `cpu`, `memory`, `load`, `disks`, `network`, `temperature`, `fans`, `system`.
 
-Systemarr liest Sensoren automatisch aus `/sys/class/hwmon`. Dazu gehören je nach Hardware CPU- und Mainboard-Temperaturen, NVMe- und `drivetemp`-Festplattenwerte sowie Lüfterdrehzahlen. Auf minimalen Systemen dient `/sys/class/thermal` als Fallback.
+Systemarr automatically discovers sensors through `/sys/class/hwmon`. Depending on the hardware, this includes CPU and motherboard temperatures, NVMe and `drivetemp` disk values, and fan speeds. `/sys/class/thermal` is used as a fallback on minimal systems.
 
-Die CPU-Kachel zeigt außerdem den aktuellen Durchschnittstakt und, sofern der Kernel sie bereitstellt, die minimale und maximale Taktrate. Datenträger werden mit ihrem Hardwaremodell beziehungsweise bei ZFS mit Pool und Dataset angezeigt. Lüfter mit 0 RPM werden ausgeblendet; vorhandene Min-/Max- und PWM-Werte erscheinen als Zusatzinformation.
+The CPU card also shows the current average frequency and, when exposed by the kernel, the minimum and maximum frequencies. Disks include their hardware model, while ZFS volumes show their pool and dataset. Fans reporting 0 RPM are hidden; available minimum, maximum, and PWM values are shown as additional details.
 
-## Lokal entwickeln
+## Local development
 
 ```sh
 npm install

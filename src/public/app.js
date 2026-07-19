@@ -4,9 +4,9 @@ const routeAliases = { ram: "memory", storage: "disks", temperatures: "temperatu
 const routeName = location.pathname.replace(/^\/+|\/+$/g, "").toLowerCase();
 const routeModule = routeAliases[routeName] || routeName;
 const modules = [
-  ["cpu", "CPU"], ["memory", "Arbeitsspeicher"], ["load", "Systemlast"],
-  ["disks", "Festplatten"], ["network", "Netzwerk"], ["temperature", "Temperatur"], ["system", "System"],
-  ["fans", "Lüfter"],
+  ["cpu", "CPU"], ["memory", "Memory"], ["load", "System Load"],
+  ["disks", "Disks"], ["network", "Network"], ["temperature", "Temperature"], ["system", "System"],
+  ["fans", "Fans"],
 ];
 const defaultModules = modules.map(([key]) => key);
 
@@ -28,7 +28,7 @@ if (modules.some(([key]) => key === routeModule)) document.body.classList.add(`m
 
 const $ = (selector) => document.querySelector(selector);
 const clamp = (value) => Math.max(0, Math.min(100, Number(value) || 0));
-const number = (value, digits = 1) => Number(value || 0).toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+const number = (value, digits = 1) => Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
 function bytes(value, rate = false) {
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -40,7 +40,7 @@ function bytes(value, rate = false) {
 
 function duration(seconds) {
   const days = Math.floor(seconds / 86400); const hours = Math.floor(seconds % 86400 / 3600); const minutes = Math.floor(seconds % 3600 / 60);
-  return [days ? `${days} T` : "", hours ? `${hours} Std` : "", `${minutes} Min`].filter(Boolean).join(" ");
+  return [days ? `${days}d` : "", hours ? `${hours}h` : "", `${minutes}m`].filter(Boolean).join(" ");
 }
 
 function setEnabled() {
@@ -76,14 +76,14 @@ function pushHistory(list, value) { list.push(value); if (list.length > 40) list
 
 function render(data) {
   const cpu = clamp(data.cpu.usage);
-  $("#cpuValue").textContent = number(cpu, 0); $("#cpuBadge").textContent = `${data.cpu.cores} Kerne`; $("#cpuModel").textContent = data.cpu.model;
+  $("#cpuValue").textContent = number(cpu, 0); $("#cpuBadge").textContent = `${data.cpu.cores} Cores`; $("#cpuModel").textContent = data.cpu.model;
   const cpuFrequency = $("#cpuFrequency"); const frequencyParts = [];
-  if (data.cpu.frequency?.currentGHz !== undefined) frequencyParts.push(`Aktuell ${number(data.cpu.frequency.currentGHz, 2)} GHz`);
+  if (data.cpu.frequency?.currentGHz !== undefined) frequencyParts.push(`Current ${number(data.cpu.frequency.currentGHz, 2)} GHz`);
   if (data.cpu.frequency?.minGHz !== undefined && data.cpu.frequency?.maxGHz !== undefined) {
-    frequencyParts.push(`Bereich ${number(data.cpu.frequency.minGHz, 2)}–${number(data.cpu.frequency.maxGHz, 2)} GHz`);
+    frequencyParts.push(`Range ${number(data.cpu.frequency.minGHz, 2)}–${number(data.cpu.frequency.maxGHz, 2)} GHz`);
   } else if (data.cpu.frequency?.maxGHz !== undefined) frequencyParts.push(`Max. ${number(data.cpu.frequency.maxGHz, 2)} GHz`);
   cpuFrequency.textContent = frequencyParts.join(" · "); cpuFrequency.hidden = !frequencyParts.length;
-  $("#cpuState").textContent = cpu > 85 ? "Hohe Auslastung" : cpu > 55 ? "Gut beschäftigt" : "Läuft entspannt";
+  $("#cpuState").textContent = cpu > 85 ? "High utilization" : cpu > 55 ? "Working steadily" : "Running smoothly";
   $("#cpuGauge").style.setProperty("--value", `${cpu * 3.6}deg`);
   const coreList = $("#cpuCores"); coreList.replaceChildren();
   (data.cpu.coreUsage || []).forEach((usage, index) => {
@@ -104,7 +104,7 @@ function render(data) {
 
   $("#diskCount").textContent = `${data.disks.length} ${data.disks.length === 1 ? "Volume" : "Volumes"}`;
   const diskList = $("#diskList"); diskList.replaceChildren();
-  if (!data.disks.length) diskList.innerHTML = '<p class="empty">Keine Datenträger gefunden</p>';
+  if (!data.disks.length) diskList.innerHTML = '<p class="empty">No disks found</p>';
   data.disks.forEach((disk) => {
     const item = document.createElement("div"); item.className = "disk-item";
     item.innerHTML = `<div class="disk-top"><div><strong class="disk-mount"></strong><span class="disk-name"></span><small class="disk-source"></small></div><b></b></div><div class="bar"><i></i></div><small class="disk-usage"></small>`;
@@ -113,7 +113,7 @@ function render(data) {
     item.querySelector(".disk-source").textContent = `${disk.fs === "zfs" ? "Dataset " : ""}${disk.device} · ${disk.fs}`;
     item.querySelector("b").textContent = `${number(disk.usage, 0)}%`;
     item.querySelector("i").style.width = `${clamp(disk.usage)}%`;
-    item.querySelector(".disk-usage").textContent = `${bytes(disk.used)} von ${bytes(disk.total)} belegt · ${bytes(disk.available)} frei`;
+    item.querySelector(".disk-usage").textContent = `${bytes(disk.used)} of ${bytes(disk.total)} used · ${bytes(disk.available)} available`;
     diskList.append(item);
   });
 
@@ -123,8 +123,8 @@ function render(data) {
   chart($("#networkChart"), state.downHistory.map((v) => v / peak * 100), state.upHistory.map((v) => v / peak * 100));
 
   const temperatures = $("#temperatureList"); temperatures.replaceChildren();
-  $("#temperatureCount").textContent = `${data.temperatures.length} Sensoren`;
-  if (!data.temperatures.length) temperatures.innerHTML = '<p class="empty">Keine unterstützten Sensoren gefunden</p>';
+  $("#temperatureCount").textContent = `${data.temperatures.length} Sensors`;
+  if (!data.temperatures.length) temperatures.innerHTML = '<p class="empty">No supported sensors found</p>';
   data.temperatures.forEach((sensor) => {
     const item = document.createElement("div"); item.innerHTML = `<span class="sensor-copy"><strong></strong><small></small></span><b></b>`;
     item.querySelector("strong").textContent = sensor.label;
@@ -135,8 +135,8 @@ function render(data) {
   });
 
   const fans = $("#fanList"); fans.replaceChildren();
-  $("#fanCount").textContent = `${data.fans?.length || 0} Lüfter`;
-  if (!data.fans?.length) fans.innerHTML = '<p class="empty">Keine unterstützten Lüfter gefunden</p>';
+  $("#fanCount").textContent = `${data.fans?.length || 0} Fans`;
+  if (!data.fans?.length) fans.innerHTML = '<p class="empty">No supported fans found</p>';
   (data.fans || []).forEach((sensor) => {
     const item = document.createElement("div"); item.innerHTML = `<span class="sensor-copy"><strong></strong><small></small></span><b></b>`;
     item.querySelector("strong").textContent = sensor.label;
@@ -151,7 +151,7 @@ function render(data) {
   });
 
   $("#systemHost").textContent = data.system.hostname; $("#systemOs").textContent = data.system.os; $("#systemKernel").textContent = data.system.kernel;
-  $("#hostLabel").textContent = data.system.hostname; $("#lastUpdated").textContent = `Aktualisiert ${new Date(data.timestamp).toLocaleTimeString("de-DE")}`;
+  $("#hostLabel").textContent = data.system.hostname; $("#lastUpdated").textContent = `Updated ${new Date(data.timestamp).toLocaleTimeString("en-US")}`;
   $("#liveStatus").classList.remove("error"); $("#liveStatus").innerHTML = "<i></i> Live";
   clearTimeout(state.timer); state.timer = setTimeout(load, data.system.refreshSeconds * 1000);
 }
@@ -160,7 +160,7 @@ async function load() {
   if (state.loading) return; state.loading = true;
   try {
     const response = await fetch("/api/metrics", { cache: "no-store" }); const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Server nicht erreichbar"); render(data);
+    if (!response.ok) throw new Error(data.error || "Server unavailable"); render(data);
   } catch (error) {
     $("#liveStatus").classList.add("error"); $("#liveStatus").innerHTML = "<i></i> Offline"; $("#lastUpdated").textContent = error.message;
     clearTimeout(state.timer); state.timer = setTimeout(load, 5000);

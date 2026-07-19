@@ -263,8 +263,8 @@ async function diskMetrics() {
 function friendlySensorName(name: string): string {
   if (["k10temp", "coretemp", "zenpower"].includes(name)) return "CPU";
   if (name === "nvme") return "NVMe";
-  if (name === "drivetemp") return "Festplatte";
-  if (/^nct|it87|asus|gigabyte|acpi/i.test(name)) return "Mainboard";
+  if (name === "drivetemp") return "Disk";
+  if (/^nct|it87|asus|gigabyte|acpi/i.test(name)) return "Motherboard";
   return name;
 }
 
@@ -342,7 +342,7 @@ async function sensorMetrics() {
         ? percentage(pwm, pwmMaximum)
         : maxRpm ? percentage(rpm, maxRpm) : undefined;
       fans.push({
-        label: fanLabelRaw?.trim() || `Lüfter ${fanIndex}`,
+        label: fanLabelRaw?.trim() || `Fan ${fanIndex}`,
         rpm, source, minRpm, maxRpm, percent,
       });
     }
@@ -408,7 +408,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   const requestUrl = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
   if (requestUrl.pathname === "/api/metrics") {
     try { json(response, 200, await collectMetrics()); }
-    catch (error) { json(response, 500, { error: error instanceof Error ? error.message : "Metriken konnten nicht gelesen werden" }); }
+    catch (error) { json(response, 500, { error: error instanceof Error ? error.message : "Metrics could not be read" }); }
     return;
   }
   if (requestUrl.pathname === "/api/health") { json(response, 200, { status: "ok" }); return; }
@@ -420,4 +420,4 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 }
 
 createServer((request, response) => { void handleRequest(request, response); })
-  .listen(port, "0.0.0.0", () => console.log(`Systemarr läuft auf http://0.0.0.0:${port}`));
+  .listen(port, "0.0.0.0", () => console.log(`Systemarr is running at http://0.0.0.0:${port}`));
