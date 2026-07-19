@@ -1,0 +1,142 @@
+const params = new URLSearchParams(location.search);
+const isEmbedded = params.get("embed") === "1" || (params.get("embed") !== "0" && self !== top);
+const routeAliases = { ram: "memory", storage: "disks", temperatures: "temperature" };
+const routeName = location.pathname.replace(/^\/+|\/+$/g, "").toLowerCase();
+const routeModule = routeAliases[routeName] || routeName;
+const modules = [
+  ["cpu", "CPU"], ["memory", "Arbeitsspeicher"], ["load", "Systemlast"],
+  ["disks", "Festplatten"], ["network", "Netzwerk"], ["temperature", "Temperatur"], ["system", "System"],
+];
+const defaultModules = modules.map(([key]) => key);
+
+function savedModules() {
+  if (modules.some(([key]) => key === routeModule)) return [routeModule];
+  const fromUrl = params.get("modules")?.split(",").filter((key) => modules.some(([known]) => known === key));
+  if (fromUrl?.length) return fromUrl;
+  try {
+    const value = JSON.parse(localStorage.getItem("systemarr-modules"));
+    if (Array.isArray(value) && value.length) return value;
+  } catch {}
+  return defaultModules;
+}
+
+const state = { enabled: savedModules(), cpuHistory: [], downHistory: [], upHistory: [], timer: undefined, loading: false };
+document.body.classList.toggle("embedded", isEmbedded);
+document.body.classList.toggle("single-module", modules.some(([key]) => key === routeModule));
+if (modules.some(([key]) => key === routeModule)) document.body.classList.add(`module-${routeModule}`);
+
+const $ = (selector) => document.querySelector(selector);
+const clamp = (value) => Math.max(0, Math.min(100, Number(value) || 0));
+const number = (value, digits = 1) => Number(value || 0).toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+
+function bytes(value, rate = false) {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let size = Math.max(0, Number(value) || 0); let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) { size /= 1024; unit += 1; }
+  const digits = size >= 100 || unit === 0 ? 0 : size >= 10 ? 1 : 2;
+  return `${number(size, digits)} ${units[unit]}${rate ? "/s" : ""}`;
+}
+
+function duration(seconds) {
+  const days = Math.floor(seconds / 86400); const hours = Math.floor(seconds % 86400 / 3600); const minutes = Math.floor(seconds % 3600 / 60);
+  return [days ? `${days} T` : "", hours ? `${hours} Std` : "", `${minutes} Min`].filter(Boolean).join(" ");
+}
+
+function setEnabled() {
+  document.querySelectorAll("[data-module]").forEach((card) => { card.hidden = !state.enabled.includes(card.dataset.module); });
+  document.querySelectorAll("[data-choice]").forEach((input) => { input.checked = state.enabled.includes(input.dataset.choice); });
+  document.body.classList.toggle("few-modules", state.enabled.length <= 3);
+}
+
+function makeChoices() {
+  const container = $("#moduleChoices");
+  modules.forEach(([key, label]) => {
+    const row = document.createElement("label");
+    row.innerHTML = `<span>${label}</span><input type="checkbox" data-choice="${key}"><i></i>`;
+    row.querySelector("input").addEventListener("change", (event) => {
+      if (event.target.checked) state.enabled.push(key); else state.enabled = state.enabled.filter((item) => item !== key);
+      if (!state.enabled.length) state.enabled = [key];
+      try { localStorage.setItem("systemarr-modules", JSON.stringify(state.enabled)); } catch {}
+      setEnabled();
+    });
+    container.append(row);
+  });
+  setEnabled();
+}
+
+function chart(element, series, secondary) {
+  const all = secondary ? [...series, ...secondary] : series;
+  const maximum = Math.max(100, ...all, 1);
+  const points = (values) => values.map((value, index) => `${values.length === 1 ? 100 : index / (values.length - 1) * 100},${42 - value / maximum * 38}`).join(" ");
+  element.innerHTML = `<svg viewBox="0 0 100 44" preserveAspectRatio="none"><defs><linearGradient id="fill-${element.id}" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#6ce5c2" stop-opacity=".28"/><stop offset="1" stop-color="#6ce5c2" stop-opacity="0"/></linearGradient></defs><polygon points="0,44 ${points(series)} 100,44" fill="url(#fill-${element.id})"/><polyline points="${points(series)}"/><polyline class="secondary" points="${secondary ? points(secondary) : ""}"/></svg>`;
+}
+
+function pushHistory(list, value) { list.push(value); if (list.length > 40) list.shift(); }
+
+function render(data) {
+  const cpu = clamp(data.cpu.usage);
+  $("#cpuValue").textContent = number(cpu, 0); $("#cpuBadge").textContent = `${data.cpu.cores} Kerne`; $("#cpuModel").textContent = data.cpu.model;
+  $("#cpuState").textContent = cpu > 85 ? "Hohe Auslastung" : cpu > 55 ? "Gut beschäftigt" : "Läuft entspannt";
+  $("#cpuGauge").style.setProperty("--value", `${cpu * 3.6}deg`);
+  pushHistory(state.cpuHistory, cpu); chart($("#cpuChart"), state.cpuHistory);
+
+  $("#memoryPercent").textContent = `${number(data.memory.usage, 0)}%`; $("#memoryBar").style.width = `${clamp(data.memory.usage)}%`;
+  $("#memoryUsed").textContent = bytes(data.memory.used); $("#memoryFree").textContent = bytes(data.memory.available);
+  $("#swapRow").hidden = !data.memory.swapTotal; $("#swapValue").textContent = `${bytes(data.memory.swapUsed)} / ${bytes(data.memory.swapTotal)}`;
+
+  $("#loadOne").textContent = number(data.load.one, 2); $("#loadFive").textContent = number(data.load.five, 2); $("#loadFifteen").textContent = number(data.load.fifteen, 2);
+  $("#uptimeValue").textContent = duration(data.uptime);
+
+  $("#diskCount").textContent = `${data.disks.length} ${data.disks.length === 1 ? "Volume" : "Volumes"}`;
+  const diskList = $("#diskList"); diskList.replaceChildren();
+  if (!data.disks.length) diskList.innerHTML = '<p class="empty">Keine Datenträger gefunden</p>';
+  data.disks.forEach((disk) => {
+    const item = document.createElement("div"); item.className = "disk-item";
+    item.innerHTML = `<div class="disk-top"><div><strong></strong><span></span></div><b></b></div><div class="bar"><i></i></div><small></small>`;
+    item.querySelector("strong").textContent = disk.mount === "/" ? "System" : disk.mount;
+    item.querySelector("span").textContent = `${disk.device} · ${disk.fs}`;
+    item.querySelector("b").textContent = `${number(disk.usage, 0)}%`;
+    item.querySelector("i").style.width = `${clamp(disk.usage)}%`;
+    item.querySelector("small").textContent = `${bytes(disk.used)} von ${bytes(disk.total)} belegt · ${bytes(disk.available)} frei`;
+    diskList.append(item);
+  });
+
+  $("#downloadValue").textContent = bytes(data.network.receivedPerSecond, true); $("#uploadValue").textContent = bytes(data.network.transmittedPerSecond, true);
+  pushHistory(state.downHistory, data.network.receivedPerSecond); pushHistory(state.upHistory, data.network.transmittedPerSecond);
+  const peak = Math.max(...state.downHistory, ...state.upHistory, 1);
+  chart($("#networkChart"), state.downHistory.map((v) => v / peak * 100), state.upHistory.map((v) => v / peak * 100));
+
+  const temperatures = $("#temperatureList"); temperatures.replaceChildren();
+  if (!data.temperatures.length) temperatures.innerHTML = '<p class="empty">Keine unterstützten Sensoren gefunden</p>';
+  data.temperatures.slice(0, 5).forEach((sensor) => {
+    const item = document.createElement("div"); item.innerHTML = `<span></span><strong></strong>`;
+    item.querySelector("span").textContent = sensor.label; item.querySelector("strong").textContent = `${number(sensor.celsius, 1)} °C`; temperatures.append(item);
+  });
+
+  $("#systemHost").textContent = data.system.hostname; $("#systemOs").textContent = data.system.os; $("#systemKernel").textContent = data.system.kernel;
+  $("#hostLabel").textContent = data.system.hostname; $("#lastUpdated").textContent = `Aktualisiert ${new Date(data.timestamp).toLocaleTimeString("de-DE")}`;
+  $("#liveStatus").classList.remove("error"); $("#liveStatus").innerHTML = "<i></i> Live";
+  clearTimeout(state.timer); state.timer = setTimeout(load, data.system.refreshSeconds * 1000);
+}
+
+async function load() {
+  if (state.loading) return; state.loading = true;
+  try {
+    const response = await fetch("/api/metrics", { cache: "no-store" }); const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Server nicht erreichbar"); render(data);
+  } catch (error) {
+    $("#liveStatus").classList.add("error"); $("#liveStatus").innerHTML = "<i></i> Offline"; $("#lastUpdated").textContent = error.message;
+    clearTimeout(state.timer); state.timer = setTimeout(load, 5000);
+  } finally { state.loading = false; }
+}
+
+makeChoices();
+if (document.body.classList.contains("single-module")) {
+  $("#layoutButton").hidden = true;
+  document.title = `${modules.find(([key]) => key === routeModule)?.[1] || "System"} · Systemarr`;
+}
+$("#layoutButton").addEventListener("click", () => { const panel = $("#layoutPanel"); panel.hidden = !panel.hidden; $("#layoutButton").setAttribute("aria-expanded", String(!panel.hidden)); });
+$("#resetLayout").addEventListener("click", () => { state.enabled = [...defaultModules]; try { localStorage.removeItem("systemarr-modules"); } catch {} setEnabled(); });
+$("#refreshButton").addEventListener("click", load);
+document.addEventListener("click", (event) => { if (!event.target.closest("#layoutPanel, #layoutButton")) $("#layoutPanel").hidden = true; });
+load();
