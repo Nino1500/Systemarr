@@ -69,17 +69,15 @@ async function cpuFrequency(cpuInfo?: string) {
 
   const readings = await Promise.all(frequencyDirectories.map(async (directory) => {
     const current = await readText(join(directory, "scaling_cur_freq"));
-    const minimum = await readText(join(directory, "cpuinfo_min_freq")) ?? await readText(join(directory, "scaling_min_freq"));
     const maximum = await readText(join(directory, "cpuinfo_max_freq")) ?? await readText(join(directory, "scaling_max_freq"));
     const parse = (value: string | undefined) => {
       const frequency = Number(value?.trim());
       return Number.isFinite(frequency) && frequency > 0 ? frequency / 1_000_000 : undefined;
     };
-    return { current: parse(current), minimum: parse(minimum), maximum: parse(maximum) };
+    return { current: parse(current), maximum: parse(maximum) };
   }));
 
   const currentValues = readings.flatMap(({ current }) => current === undefined ? [] : [current]);
-  const minimumValues = readings.flatMap(({ minimum }) => minimum === undefined ? [] : [minimum]);
   const maximumValues = readings.flatMap(({ maximum }) => maximum === undefined ? [] : [maximum]);
   let currentGHz = average(currentValues);
   if (currentGHz === undefined && cpuInfo) {
@@ -88,11 +86,10 @@ async function cpuFrequency(cpuInfo?: string) {
     const currentMhz = average(mhzValues);
     if (currentMhz !== undefined) currentGHz = currentMhz / 1000;
   }
-  const minGHz = minimumValues.length ? Math.min(...minimumValues) : undefined;
   const maxGHz = maximumValues.length ? Math.max(...maximumValues) : undefined;
-  return currentGHz === undefined && minGHz === undefined && maxGHz === undefined
+  return currentGHz === undefined && maxGHz === undefined
     ? undefined
-    : { currentGHz, minGHz, maxGHz };
+    : { currentGHz, maxGHz };
 }
 
 async function cpuMetrics() {
