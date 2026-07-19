@@ -31,6 +31,8 @@ http://<ubuntu-host>:3010/fans?embed=1
 http://<ubuntu-host>:3010/system?embed=1
 ```
 
+Single-module iframe routes automatically use a compact layout without the Systemarr header. The CPU route adjusts its gauge, core grid, and chart to the available widget size and hides the chart only in very short iframes.
+
 The `/ram` and `/storage` aliases are also available. `/overview` opens the complete dashboard.
 
 Use **Modules** to show or hide individual cards. The selection is stored in the browser. For a fixed iframe configuration, modules can also be specified in the URL:
