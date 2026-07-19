@@ -84,9 +84,7 @@ function render(data) {
   $("#cpuValue").textContent = number(cpu, 0); $("#cpuBadge").textContent = `${data.cpu.cores} Cores`; $("#cpuModel").textContent = data.cpu.model;
   const cpuFrequency = $("#cpuFrequency"); const frequencyParts = [];
   if (data.cpu.frequency?.currentGHz !== undefined) frequencyParts.push(`Current ${number(data.cpu.frequency.currentGHz, 2)} GHz`);
-  if (data.cpu.frequency?.minGHz !== undefined && data.cpu.frequency?.maxGHz !== undefined) {
-    frequencyParts.push(`Range ${number(data.cpu.frequency.minGHz, 2)}–${number(data.cpu.frequency.maxGHz, 2)} GHz`);
-  } else if (data.cpu.frequency?.maxGHz !== undefined) frequencyParts.push(`Max. ${number(data.cpu.frequency.maxGHz, 2)} GHz`);
+  if (data.cpu.frequency?.maxGHz !== undefined) frequencyParts.push(`Maximum ${number(data.cpu.frequency.maxGHz, 2)} GHz`);
   cpuFrequency.textContent = frequencyParts.join(" · "); cpuFrequency.hidden = !frequencyParts.length;
   $("#cpuState").textContent = cpu > 85 ? "High utilization" : cpu > 55 ? "Working steadily" : "Running smoothly";
   $("#cpuGauge").style.setProperty("--value", `${cpu * 3.6}deg`);
