@@ -2,6 +2,8 @@
 
 A lightweight, iframe-friendly Ubuntu dashboard for CPU, RAM, system load, disks, network, temperatures, fans, and system information.
 
+The interface is English and uses European formatting: 24-hour time, `DD/MM/YYYY` dates, Celsius, and metric units.
+
 ## Docker on Ubuntu
 
 ```sh

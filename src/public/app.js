@@ -28,7 +28,12 @@ if (modules.some(([key]) => key === routeModule)) document.body.classList.add(`m
 
 const $ = (selector) => document.querySelector(selector);
 const clamp = (value) => Math.max(0, Math.min(100, Number(value) || 0));
-const number = (value, digits = 1) => Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+const locale = "en-GB";
+const dateTime = new Intl.DateTimeFormat(locale, {
+  day: "2-digit", month: "2-digit", year: "numeric",
+  hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+});
+const number = (value, digits = 1) => Number(value || 0).toLocaleString(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
 function bytes(value, rate = false) {
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -151,7 +156,7 @@ function render(data) {
   });
 
   $("#systemHost").textContent = data.system.hostname; $("#systemOs").textContent = data.system.os; $("#systemKernel").textContent = data.system.kernel;
-  $("#hostLabel").textContent = data.system.hostname; $("#lastUpdated").textContent = `Updated ${new Date(data.timestamp).toLocaleTimeString("en-US")}`;
+  $("#hostLabel").textContent = data.system.hostname; $("#lastUpdated").textContent = `Updated ${dateTime.format(new Date(data.timestamp))}`;
   $("#liveStatus").classList.remove("error"); $("#liveStatus").innerHTML = "<i></i> Live";
   clearTimeout(state.timer); state.timer = setTimeout(load, data.system.refreshSeconds * 1000);
 }
