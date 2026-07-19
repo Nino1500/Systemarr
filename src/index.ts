@@ -45,6 +45,56 @@ function percentage(value: number, maximum: number): number {
   return maximum > 0 ? Math.min(100, Math.max(0, value / maximum * 100)) : 0;
 }
 
+function average(values: number[]): number | undefined {
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : undefined;
+}
+
+async function cpuFrequency(cpuInfo?: string) {
+  const cpuRoot = join(sysRoot, "devices", "system", "cpu");
+  let frequencyDirectories: string[] = [];
+  try {
+    const policyRoot = join(cpuRoot, "cpufreq");
+    frequencyDirectories = (await readdir(policyRoot))
+      .filter((name) => /^policy\d+$/.test(name))
+      .map((name) => join(policyRoot, name));
+  } catch { /* Some drivers expose cpufreq only below the individual CPUs. */ }
+
+  if (!frequencyDirectories.length) {
+    try {
+      frequencyDirectories = (await readdir(cpuRoot))
+        .filter((name) => /^cpu\d+$/.test(name))
+        .map((name) => join(cpuRoot, name, "cpufreq"));
+    } catch { /* Fall back to /proc/cpuinfo below. */ }
+  }
+
+  const readings = await Promise.all(frequencyDirectories.map(async (directory) => {
+    const current = await readText(join(directory, "scaling_cur_freq"));
+    const minimum = await readText(join(directory, "cpuinfo_min_freq")) ?? await readText(join(directory, "scaling_min_freq"));
+    const maximum = await readText(join(directory, "cpuinfo_max_freq")) ?? await readText(join(directory, "scaling_max_freq"));
+    const parse = (value: string | undefined) => {
+      const frequency = Number(value?.trim());
+      return Number.isFinite(frequency) && frequency > 0 ? frequency / 1_000_000 : undefined;
+    };
+    return { current: parse(current), minimum: parse(minimum), maximum: parse(maximum) };
+  }));
+
+  const currentValues = readings.flatMap(({ current }) => current === undefined ? [] : [current]);
+  const minimumValues = readings.flatMap(({ minimum }) => minimum === undefined ? [] : [minimum]);
+  const maximumValues = readings.flatMap(({ maximum }) => maximum === undefined ? [] : [maximum]);
+  let currentGHz = average(currentValues);
+  if (currentGHz === undefined && cpuInfo) {
+    const mhzValues = [...cpuInfo.matchAll(/^cpu MHz\s*:\s*([\d.]+)$/gm)]
+      .map((match) => Number(match[1])).filter(Number.isFinite);
+    const currentMhz = average(mhzValues);
+    if (currentMhz !== undefined) currentGHz = currentMhz / 1000;
+  }
+  const minGHz = minimumValues.length ? Math.min(...minimumValues) : undefined;
+  const maxGHz = maximumValues.length ? Math.max(...maximumValues) : undefined;
+  return currentGHz === undefined && minGHz === undefined && maxGHz === undefined
+    ? undefined
+    : { currentGHz, minGHz, maxGHz };
+}
+
 async function cpuMetrics() {
   const stat = await readText(join(procRoot, "stat"));
   if (!stat) {
@@ -63,7 +113,11 @@ async function cpuMetrics() {
       return previous && elapsed > 0 ? percentage(elapsed - (core.idle - previous.idle), elapsed) : 0;
     });
     previousCpu = current;
-    return { usage, cores: cores.length, coreUsage, model: cores[0]?.model ?? "CPU" };
+    const currentMhz = average(cores.map((cpu) => cpu.speed).filter((speed) => speed > 0));
+    return {
+      usage, cores: cores.length, coreUsage, model: cores[0]?.model ?? "CPU",
+      frequency: currentMhz === undefined ? undefined : { currentGHz: currentMhz / 1000 },
+    };
   }
 
   const lines = stat.split("\n");
@@ -85,7 +139,7 @@ async function cpuMetrics() {
   const coreCount = coreTimes.length;
   const cpuInfo = await readText(join(procRoot, "cpuinfo"));
   const model = cpuInfo?.match(/^(?:model name|Hardware)\s*:\s*(.+)$/m)?.[1]?.trim() ?? "CPU";
-  return { usage, cores: coreCount, coreUsage, model };
+  return { usage, cores: coreCount, coreUsage, model, frequency: await cpuFrequency(cpuInfo) };
 }
 
 async function memoryMetrics() {
@@ -148,6 +202,28 @@ function decodeMount(value: string): string {
   return value.replace(/\\040/g, " ").replace(/\\011/g, "\t").replace(/\\134/g, "\\");
 }
 
+function blockDeviceCandidates(device: string): string[] {
+  if (!device.startsWith("/dev/")) return [];
+  const name = device.split("/").pop() ?? "";
+  const parent = name.match(/^(nvme\d+n\d+|mmcblk\d+)p\d+$/)?.[1]
+    ?? name.match(/^((?:sd|hd|vd|xvd)[a-z]+)\d+$/)?.[1];
+  return [...new Set([name, parent].filter((value): value is string => Boolean(value)))];
+}
+
+async function diskName(device: string, fs: string): Promise<string> {
+  if (fs === "zfs") return `ZFS-Pool ${device.split("/")[0]}`;
+  for (const blockDevice of blockDeviceCandidates(device)) {
+    const [vendor, model] = await Promise.all([
+      readText(join(sysRoot, "class", "block", blockDevice, "device", "vendor")),
+      readText(join(sysRoot, "class", "block", blockDevice, "device", "model")),
+    ]);
+    const label = [vendor?.trim(), model?.trim()].filter(Boolean).join(" ").replace(/\s+/g, " ");
+    if (label) return label;
+  }
+  if (device.startsWith("/dev/mapper/")) return `Mapper ${device.split("/").pop()}`;
+  return device;
+}
+
 async function diskMetrics() {
   const configured = (process.env.DISK_PATHS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
   let mounts: Array<{ device: string; mount: string; fs: string }> = [];
@@ -175,7 +251,10 @@ async function diskMetrics() {
       const available = Number(stats.bavail * stats.bsize);
       const free = Number(stats.bfree * stats.bsize);
       const used = total - free;
-      disks.push({ device: entry.device, mount: entry.mount, fs: entry.fs, total, used, available, usage: percentage(used, total) });
+      disks.push({
+        device: entry.device, name: await diskName(entry.device, entry.fs), mount: entry.mount,
+        fs: entry.fs, total, used, available, usage: percentage(used, total),
+      });
     } catch { /* Mount is not visible inside the container. */ }
   }
   return disks.sort((a, b) => a.mount === "/" ? -1 : b.mount === "/" ? 1 : a.mount.localeCompare(b.mount));
@@ -208,7 +287,7 @@ async function hwmonDeviceName(base: string, driver: string): Promise<string> {
 
 async function sensorMetrics() {
   const temperatures: Array<{ label: string; celsius: number; source: string; category: string }> = [];
-  const fans: Array<{ label: string; rpm: number; source: string }> = [];
+  const fans: Array<{ label: string; rpm: number; source: string; minRpm?: number; maxRpm?: number; percent?: number }> = [];
   const hwmonRoot = join(sysRoot, "class", "hwmon");
   let hwmonDirectories: string[] = [];
   try { hwmonDirectories = (await readdir(hwmonRoot)).filter((name) => /^hwmon\d+$/.test(name)); }
@@ -243,9 +322,29 @@ async function sensorMetrics() {
       const raw = await readText(join(base, `fan${fanIndex}_input`));
       if (!raw) continue;
       const rpm = Number(raw.trim());
-      if (!Number.isFinite(rpm) || rpm < 0) continue;
-      const fanLabel = (await readText(join(base, `fan${fanIndex}_label`)))?.trim();
-      fans.push({ label: fanLabel || `Lüfter ${fanIndex}`, rpm, source });
+      if (!Number.isFinite(rpm) || rpm <= 0) continue;
+      const [fanLabelRaw, minimumRaw, maximumRaw, pwmRaw, pwmMaximumRaw] = await Promise.all([
+        readText(join(base, `fan${fanIndex}_label`)),
+        readText(join(base, `fan${fanIndex}_min`)),
+        readText(join(base, `fan${fanIndex}_max`)),
+        readText(join(base, `pwm${fanIndex}`)),
+        readText(join(base, `pwm${fanIndex}_max`)),
+      ]);
+      const rpmLimit = (value: string | undefined) => {
+        const parsed = Number(value?.trim());
+        return Number.isFinite(parsed) && parsed > 0 && parsed < 100_000 ? parsed : undefined;
+      };
+      const minRpm = rpmLimit(minimumRaw);
+      const maxRpm = rpmLimit(maximumRaw);
+      const pwm = Number(pwmRaw?.trim());
+      const pwmMaximum = Number(pwmMaximumRaw?.trim()) || 255;
+      const percent = Number.isFinite(pwm) && pwm >= 0 && pwmMaximum > 0
+        ? percentage(pwm, pwmMaximum)
+        : maxRpm ? percentage(rpm, maxRpm) : undefined;
+      fans.push({
+        label: fanLabelRaw?.trim() || `Lüfter ${fanIndex}`,
+        rpm, source, minRpm, maxRpm, percent,
+      });
     }
   }
 

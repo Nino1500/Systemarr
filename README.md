@@ -41,6 +41,8 @@ Verfügbare Namen: `cpu`, `memory`, `load`, `disks`, `network`, `temperature`, `
 
 Systemarr liest Sensoren automatisch aus `/sys/class/hwmon`. Dazu gehören je nach Hardware CPU- und Mainboard-Temperaturen, NVMe- und `drivetemp`-Festplattenwerte sowie Lüfterdrehzahlen. Auf minimalen Systemen dient `/sys/class/thermal` als Fallback.
 
+Die CPU-Kachel zeigt außerdem den aktuellen Durchschnittstakt und, sofern der Kernel sie bereitstellt, die minimale und maximale Taktrate. Datenträger werden mit ihrem Hardwaremodell beziehungsweise bei ZFS mit Pool und Dataset angezeigt. Lüfter mit 0 RPM werden ausgeblendet; vorhandene Min-/Max- und PWM-Werte erscheinen als Zusatzinformation.
+
 ## Lokal entwickeln
 
 ```sh
