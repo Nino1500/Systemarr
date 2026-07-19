@@ -6,6 +6,7 @@ const routeModule = routeAliases[routeName] || routeName;
 const modules = [
   ["cpu", "CPU"], ["memory", "Arbeitsspeicher"], ["load", "Systemlast"],
   ["disks", "Festplatten"], ["network", "Netzwerk"], ["temperature", "Temperatur"], ["system", "System"],
+  ["fans", "Lüfter"],
 ];
 const defaultModules = modules.map(([key]) => key);
 
@@ -115,10 +116,27 @@ function render(data) {
   chart($("#networkChart"), state.downHistory.map((v) => v / peak * 100), state.upHistory.map((v) => v / peak * 100));
 
   const temperatures = $("#temperatureList"); temperatures.replaceChildren();
+  $("#temperatureCount").textContent = `${data.temperatures.length} Sensoren`;
   if (!data.temperatures.length) temperatures.innerHTML = '<p class="empty">Keine unterstützten Sensoren gefunden</p>';
-  data.temperatures.slice(0, 5).forEach((sensor) => {
-    const item = document.createElement("div"); item.innerHTML = `<span></span><strong></strong>`;
-    item.querySelector("span").textContent = sensor.label; item.querySelector("strong").textContent = `${number(sensor.celsius, 1)} °C`; temperatures.append(item);
+  data.temperatures.forEach((sensor) => {
+    const item = document.createElement("div"); item.innerHTML = `<span class="sensor-copy"><strong></strong><small></small></span><b></b>`;
+    item.querySelector("strong").textContent = sensor.label;
+    item.querySelector("small").textContent = sensor.source;
+    item.querySelector("b").textContent = `${number(sensor.celsius, 1)} °C`;
+    item.dataset.category = sensor.category;
+    temperatures.append(item);
+  });
+
+  const fans = $("#fanList"); fans.replaceChildren();
+  $("#fanCount").textContent = `${data.fans?.length || 0} Lüfter`;
+  if (!data.fans?.length) fans.innerHTML = '<p class="empty">Keine unterstützten Lüfter gefunden</p>';
+  (data.fans || []).forEach((sensor) => {
+    const item = document.createElement("div"); item.innerHTML = `<span class="sensor-copy"><strong></strong><small></small></span><b></b>`;
+    item.querySelector("strong").textContent = sensor.label;
+    item.querySelector("small").textContent = sensor.source;
+    item.querySelector("b").textContent = `${number(sensor.rpm, 0)} RPM`;
+    item.classList.toggle("stopped", sensor.rpm === 0);
+    fans.append(item);
   });
 
   $("#systemHost").textContent = data.system.hostname; $("#systemOs").textContent = data.system.os; $("#systemKernel").textContent = data.system.kernel;

@@ -25,6 +25,7 @@ http://<ubuntu-host>:3010/load?embed=1
 http://<ubuntu-host>:3010/disks?embed=1
 http://<ubuntu-host>:3010/network?embed=1
 http://<ubuntu-host>:3010/temperature?embed=1
+http://<ubuntu-host>:3010/fans?embed=1
 http://<ubuntu-host>:3010/system?embed=1
 ```
 
@@ -36,9 +37,9 @@ Die Kurzformen `/ram` und `/storage` funktionieren ebenfalls. `/overview` öffne
 http://<ubuntu-host>:3010/?embed=1&modules=cpu,memory,disks,network
 ```
 
-Verfügbare Namen: `cpu`, `memory`, `load`, `disks`, `network`, `temperature`, `system`.
+Verfügbare Namen: `cpu`, `memory`, `load`, `disks`, `network`, `temperature`, `fans`, `system`.
 
-Temperaturen erscheinen nur, wenn der Ubuntu-Kernel passende Werte unter `/sys/class/thermal` bereitstellt.
+Systemarr liest Sensoren automatisch aus `/sys/class/hwmon`. Dazu gehören je nach Hardware CPU- und Mainboard-Temperaturen, NVMe- und `drivetemp`-Festplattenwerte sowie Lüfterdrehzahlen. Auf minimalen Systemen dient `/sys/class/thermal` als Fallback.
 
 ## Lokal entwickeln
 

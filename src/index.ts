@@ -1,5 +1,5 @@
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
-import { readFile, statfs } from "node:fs/promises";
+import { readFile, readdir, statfs } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { cpus, freemem, hostname as localHostname, loadavg, platform, release, totalmem, uptime } from "node:os";
 
@@ -11,7 +11,7 @@ const sysRoot = process.env.SYS_ROOT ?? "/host/sys";
 const refreshSeconds = Math.max(1, Number(process.env.REFRESH_SECONDS ?? 2));
 const dashboardRoutes = new Set([
   "/overview", "/cpu", "/memory", "/ram", "/load", "/disks", "/storage",
-  "/network", "/temperature", "/temperatures", "/system",
+  "/network", "/temperature", "/temperatures", "/fans", "/system",
 ]);
 
 interface CpuTimes { idle: number; total: number }
@@ -181,9 +181,80 @@ async function diskMetrics() {
   return disks.sort((a, b) => a.mount === "/" ? -1 : b.mount === "/" ? 1 : a.mount.localeCompare(b.mount));
 }
 
-async function temperatureMetrics() {
+function friendlySensorName(name: string): string {
+  if (["k10temp", "coretemp", "zenpower"].includes(name)) return "CPU";
+  if (name === "nvme") return "NVMe";
+  if (name === "drivetemp") return "Festplatte";
+  if (/^nct|it87|asus|gigabyte|acpi/i.test(name)) return "Mainboard";
+  return name;
+}
+
+function sensorCategory(name: string): "cpu" | "disk" | "board" | "other" {
+  if (["k10temp", "coretemp", "zenpower"].includes(name)) return "cpu";
+  if (["nvme", "drivetemp"].includes(name)) return "disk";
+  if (/^nct|it87|asus|gigabyte|acpi/i.test(name)) return "board";
+  return "other";
+}
+
+async function hwmonDeviceName(base: string, driver: string): Promise<string> {
+  const blockDirectory = join(base, "device", "block");
+  try {
+    const devices = await readdir(blockDirectory);
+    if (devices[0]) return devices[0];
+  } catch { /* Not a block-device sensor. */ }
+  const model = (await readText(join(base, "device", "model")))?.trim();
+  return model || friendlySensorName(driver);
+}
+
+async function sensorMetrics() {
+  const temperatures: Array<{ label: string; celsius: number; source: string; category: string }> = [];
+  const fans: Array<{ label: string; rpm: number; source: string }> = [];
+  const hwmonRoot = join(sysRoot, "class", "hwmon");
+  let hwmonDirectories: string[] = [];
+  try { hwmonDirectories = (await readdir(hwmonRoot)).filter((name) => /^hwmon\d+$/.test(name)); }
+  catch { /* Fall back to thermal zones below. */ }
+
+  for (const directory of hwmonDirectories) {
+    const base = join(hwmonRoot, directory);
+    const driver = (await readText(join(base, "name")))?.trim();
+    if (!driver) continue;
+    const files = await readdir(base);
+    const device = await hwmonDeviceName(base, driver);
+    const source = device === friendlySensorName(driver) ? device : `${friendlySensorName(driver)} ${device}`;
+
+    const temperatureIndexes = files.flatMap((file) => file.match(/^temp(\d+)_input$/)?.[1] ?? []).map(Number);
+    for (const sensorIndex of temperatureIndexes) {
+      const raw = await readText(join(base, `temp${sensorIndex}_input`));
+      if (!raw) continue;
+      const value = Number(raw.trim());
+      const celsius = Math.abs(value) > 1000 ? value / 1000 : value;
+      if (!Number.isFinite(celsius) || celsius < -20 || celsius > 150) continue;
+      const sensorLabel = (await readText(join(base, `temp${sensorIndex}_label`)))?.trim();
+      temperatures.push({
+        label: sensorLabel || (driver === "drivetemp" ? device : `Sensor ${sensorIndex}`),
+        celsius,
+        source,
+        category: sensorCategory(driver),
+      });
+    }
+
+    const fanIndexes = files.flatMap((file) => file.match(/^fan(\d+)_input$/)?.[1] ?? []).map(Number);
+    for (const fanIndex of fanIndexes) {
+      const raw = await readText(join(base, `fan${fanIndex}_input`));
+      if (!raw) continue;
+      const rpm = Number(raw.trim());
+      if (!Number.isFinite(rpm) || rpm < 0) continue;
+      const fanLabel = (await readText(join(base, `fan${fanIndex}_label`)))?.trim();
+      fans.push({ label: fanLabel || `Lüfter ${fanIndex}`, rpm, source });
+    }
+  }
+
+  const categoryOrder = { cpu: 0, disk: 1, board: 2, other: 3 } as Record<string, number>;
+  temperatures.sort((a, b) => categoryOrder[a.category] - categoryOrder[b.category] || a.source.localeCompare(b.source) || a.label.localeCompare(b.label));
+  if (temperatures.length) return { temperatures, fans };
+
+  // Older or minimal systems sometimes expose only thermal zones.
   const thermalRoot = join(sysRoot, "class", "thermal");
-  const zones: Array<{ label: string; celsius: number }> = [];
   for (let index = 0; index < 32; index += 1) {
     const base = join(thermalRoot, `thermal_zone${index}`);
     const raw = await readText(join(base, "temp"));
@@ -191,9 +262,9 @@ async function temperatureMetrics() {
     const celsius = Number(raw.trim()) / 1000;
     if (!Number.isFinite(celsius) || celsius < -20 || celsius > 150) continue;
     const type = (await readText(join(base, "type")))?.trim();
-    zones.push({ label: type || `Sensor ${index + 1}`, celsius });
+    temperatures.push({ label: type || `Sensor ${index + 1}`, celsius, source: "Thermal Zone", category: "other" });
   }
-  return zones;
+  return { temperatures, fans };
 }
 
 async function systemInfo() {
@@ -208,10 +279,10 @@ async function systemInfo() {
 }
 
 async function collectMetrics() {
-  const [cpu, memory, load, up, network, disks, temperatures, system] = await Promise.all([
-    cpuMetrics(), memoryMetrics(), loadMetrics(), uptimeSeconds(), networkMetrics(), diskMetrics(), temperatureMetrics(), systemInfo(),
+  const [cpu, memory, load, up, network, disks, sensors, system] = await Promise.all([
+    cpuMetrics(), memoryMetrics(), loadMetrics(), uptimeSeconds(), networkMetrics(), diskMetrics(), sensorMetrics(), systemInfo(),
   ]);
-  return { timestamp: Date.now(), cpu, memory, load, uptime: up, network, disks, temperatures, system };
+  return { timestamp: Date.now(), cpu, memory, load, uptime: up, network, disks, temperatures: sensors.temperatures, fans: sensors.fans, system };
 }
 
 async function serveStatic(pathname: string, response: ServerResponse): Promise<void> {
