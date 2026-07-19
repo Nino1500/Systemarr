@@ -14,7 +14,8 @@ const dashboardRoutes = new Set([
   "/network", "/temperature", "/temperatures", "/system",
 ]);
 
-interface CpuSnapshot { idle: number; total: number }
+interface CpuTimes { idle: number; total: number }
+interface CpuSnapshot extends CpuTimes { cores: CpuTimes[] }
 interface NetworkSnapshot { received: number; transmitted: number; at: number }
 
 let previousCpu: CpuSnapshot | undefined;
@@ -48,13 +49,21 @@ async function cpuMetrics() {
   const stat = await readText(join(procRoot, "stat"));
   if (!stat) {
     const cores = cpus();
-    const totals = cores.reduce((sum, cpu) => sum + Object.values(cpu.times).reduce((a, b) => a + b, 0), 0);
-    const idle = cores.reduce((sum, cpu) => sum + cpu.times.idle, 0);
-    const current = { idle, total: totals };
+    const coreTimes = cores.map((cpu) => ({ idle: cpu.times.idle, total: Object.values(cpu.times).reduce((a, b) => a + b, 0) }));
+    const current = {
+      idle: coreTimes.reduce((sum, core) => sum + core.idle, 0),
+      total: coreTimes.reduce((sum, core) => sum + core.total, 0),
+      cores: coreTimes,
+    };
     const deltaTotal = previousCpu ? current.total - previousCpu.total : 0;
     const usage = previousCpu && deltaTotal > 0 ? percentage(deltaTotal - (current.idle - previousCpu.idle), deltaTotal) : 0;
+    const coreUsage = current.cores.map((core, index) => {
+      const previous = previousCpu?.cores[index];
+      const elapsed = previous ? core.total - previous.total : 0;
+      return previous && elapsed > 0 ? percentage(elapsed - (core.idle - previous.idle), elapsed) : 0;
+    });
     previousCpu = current;
-    return { usage, cores: cores.length, model: cores[0]?.model ?? "CPU" };
+    return { usage, cores: cores.length, coreUsage, model: cores[0]?.model ?? "CPU" };
   }
 
   const lines = stat.split("\n");
@@ -63,11 +72,20 @@ async function cpuMetrics() {
   const total = values.reduce((sum, value) => sum + value, 0);
   const deltaTotal = previousCpu ? total - previousCpu.total : 0;
   const usage = previousCpu && deltaTotal > 0 ? percentage(deltaTotal - (idle - previousCpu.idle), deltaTotal) : 0;
-  previousCpu = { idle, total };
-  const coreCount = lines.filter((line) => /^cpu\d+\s/.test(line)).length;
+  const coreTimes = lines.filter((line) => /^cpu\d+\s/.test(line)).map((line) => {
+    const coreValues = line.trim().split(/\s+/).slice(1).map(Number);
+    return { idle: (coreValues[3] ?? 0) + (coreValues[4] ?? 0), total: coreValues.reduce((sum, value) => sum + value, 0) };
+  });
+  const coreUsage = coreTimes.map((core, index) => {
+    const previous = previousCpu?.cores[index];
+    const elapsed = previous ? core.total - previous.total : 0;
+    return previous && elapsed > 0 ? percentage(elapsed - (core.idle - previous.idle), elapsed) : 0;
+  });
+  previousCpu = { idle, total, cores: coreTimes };
+  const coreCount = coreTimes.length;
   const cpuInfo = await readText(join(procRoot, "cpuinfo"));
   const model = cpuInfo?.match(/^(?:model name|Hardware)\s*:\s*(.+)$/m)?.[1]?.trim() ?? "CPU";
-  return { usage, cores: coreCount, model };
+  return { usage, cores: coreCount, coreUsage, model };
 }
 
 async function memoryMetrics() {

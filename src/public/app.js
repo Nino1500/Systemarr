@@ -78,6 +78,14 @@ function render(data) {
   $("#cpuValue").textContent = number(cpu, 0); $("#cpuBadge").textContent = `${data.cpu.cores} Kerne`; $("#cpuModel").textContent = data.cpu.model;
   $("#cpuState").textContent = cpu > 85 ? "Hohe Auslastung" : cpu > 55 ? "Gut beschäftigt" : "Läuft entspannt";
   $("#cpuGauge").style.setProperty("--value", `${cpu * 3.6}deg`);
+  const coreList = $("#cpuCores"); coreList.replaceChildren();
+  (data.cpu.coreUsage || []).forEach((usage, index) => {
+    const core = document.createElement("div");
+    core.innerHTML = `<span>C${index + 1}</span><i><b></b></i><strong></strong>`;
+    core.querySelector("b").style.width = `${clamp(usage)}%`;
+    core.querySelector("strong").textContent = `${number(usage, 0)}%`;
+    coreList.append(core);
+  });
   pushHistory(state.cpuHistory, cpu); chart($("#cpuChart"), state.cpuHistory);
 
   $("#memoryPercent").textContent = `${number(data.memory.usage, 0)}%`; $("#memoryBar").style.width = `${clamp(data.memory.usage)}%`;
