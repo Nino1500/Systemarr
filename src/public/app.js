@@ -86,6 +86,10 @@ function render(data) {
   if (data.cpu.frequency?.currentGHz !== undefined) frequencyParts.push(`Current ${number(data.cpu.frequency.currentGHz, 2)} GHz`);
   if (data.cpu.frequency?.maxGHz !== undefined) frequencyParts.push(`Maximum ${number(data.cpu.frequency.maxGHz, 2)} GHz`);
   cpuFrequency.textContent = frequencyParts.join(" · "); cpuFrequency.hidden = !frequencyParts.length;
+  const cpuTemperature = $("#cpuTemperature");
+  cpuTemperature.textContent = data.cpu.temperature ? `Temperature ${number(data.cpu.temperature.celsius, 1)} °C` : "";
+  cpuTemperature.title = data.cpu.temperature ? `${data.cpu.temperature.label} · ${data.cpu.temperature.source}` : "";
+  cpuTemperature.hidden = !data.cpu.temperature;
   $("#cpuState").textContent = cpu > 85 ? "High utilization" : cpu > 55 ? "Working steadily" : "Running smoothly";
   $("#cpuGauge").style.setProperty("--value", `${cpu * 3.6}deg`);
   const coreList = $("#cpuCores"); coreList.replaceChildren();
