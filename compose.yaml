@@ -1,18 +1,11 @@
 services:
   systemarr:
-    build: .
-    image: systemarr:local
+    image: ghcr.io/nino1500/systemarr:latest
+    pull_policy: always
     container_name: systemarr
     restart: unless-stopped
     ports:
-      - "${SYSTEMARR_PORT:-3010}:3010"
-    environment:
-      PORT: 3010
-      HOST_ROOT: /host
-      PROC_ROOT: /host/proc
-      SYS_ROOT: /host/sys
-      REFRESH_SECONDS: ${REFRESH_SECONDS:-2}
-      DISK_PATHS: ${DISK_PATHS:-}
+      - "3010:3010"
     volumes:
       - type: bind
         source: /

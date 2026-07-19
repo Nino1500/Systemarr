@@ -5,11 +5,10 @@ Ein schlankes, iframe-freundliches Ubuntu-Dashboard für CPU, RAM, Systemlast, F
 ## Docker auf Ubuntu
 
 ```sh
-cp .env.example .env
-docker compose up -d --build
+docker compose up -d
 ```
 
-Danach ist Systemarr unter `http://<ubuntu-host>:3010` erreichbar. Das Host-Dateisystem wird ausschließlich lesbar (`read_only`) eingebunden. Dadurch zeigt Systemarr die Werte des Ubuntu-Hosts und nicht nur die des Containers.
+Compose lädt automatisch `ghcr.io/nino1500/systemarr:latest`. Danach ist Systemarr fest unter `http://<ubuntu-host>:3010` erreichbar. Eine `.env`-Datei ist nicht erforderlich. Das Host-Dateisystem wird ausschließlich lesbar (`read_only`) eingebunden. Dadurch zeigt Systemarr die Werte des Ubuntu-Hosts und nicht nur die des Containers.
 
 ## Iframe / Homarr
 
@@ -38,14 +37,6 @@ http://<ubuntu-host>:3010/?embed=1&modules=cpu,memory,disks,network
 ```
 
 Verfügbare Namen: `cpu`, `memory`, `load`, `disks`, `network`, `temperature`, `system`.
-
-## Konfiguration
-
-| Variable | Standard | Beschreibung |
-| --- | --- | --- |
-| `SYSTEMARR_PORT` | `3010` | Veröffentlichter Port |
-| `REFRESH_SECONDS` | `2` | Aktualisierungsintervall |
-| `DISK_PATHS` | automatisch | Kommagetrennte Mountpoints, z. B. `/,/mnt/data` |
 
 Temperaturen erscheinen nur, wenn der Ubuntu-Kernel passende Werte unter `/sys/class/thermal` bereitstellt.
 
