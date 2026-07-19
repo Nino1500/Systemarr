@@ -483,6 +483,18 @@ function primaryCpuTemperature(temperatures: TemperatureSensor[]): TemperatureSe
   return candidates[0]?.sensor;
 }
 
+function primaryMemoryTemperature(temperatures: TemperatureSensor[]): TemperatureSensor | undefined {
+  const candidates = temperatures.flatMap((sensor) => {
+    const label = sensor.label.trim().toLowerCase();
+    const source = sensor.source.trim().toLowerCase();
+    if (/spd5118|\bjc42\b|(?:peci[-_ ]?)?dimm[-_ ]?temp/.test(source)) return [{ sensor, priority: 0 }];
+    if (sensor.category !== "cpu" && /\b(?:dimm|dram|memory)\b/.test(label)) return [{ sensor, priority: 1 }];
+    return [];
+  });
+  candidates.sort((a, b) => a.priority - b.priority || b.sensor.celsius - a.sensor.celsius);
+  return candidates[0]?.sensor;
+}
+
 async function systemInfo() {
   const releaseText = await readText(join(hostRoot, "etc", "os-release")) ?? "";
   const values = Object.fromEntries(releaseText.split("\n").map((line) => {
@@ -499,10 +511,14 @@ async function collectMetrics() {
     cpuMetrics(), memoryMetrics(), loadMetrics(), uptimeSeconds(), networkMetrics(), diskMetrics(), sensorMetrics(), systemInfo(),
   ]);
   const cpuTemperature = primaryCpuTemperature(sensors.temperatures);
+  const memoryTemperature = primaryMemoryTemperature(sensors.temperatures);
   const cpuWithTemperature = cpuTemperature
     ? { ...cpu, temperature: { celsius: cpuTemperature.celsius, label: cpuTemperature.label, source: cpuTemperature.source } }
     : cpu;
-  return { timestamp: Date.now(), cpu: cpuWithTemperature, memory, load, uptime: up, network, disks, temperatures: sensors.temperatures, fans: sensors.fans, system };
+  const memoryWithTemperature = memoryTemperature
+    ? { ...memory, temperature: { celsius: memoryTemperature.celsius, label: memoryTemperature.label, source: memoryTemperature.source } }
+    : memory;
+  return { timestamp: Date.now(), cpu: cpuWithTemperature, memory: memoryWithTemperature, load, uptime: up, network, disks, temperatures: sensors.temperatures, fans: sensors.fans, system };
 }
 
 async function serveStatic(pathname: string, response: ServerResponse): Promise<void> {

@@ -104,8 +104,12 @@ function render(data) {
 
   const memoryUsage = clamp(data.memory.usage);
   $("#memoryPercent").textContent = number(memoryUsage, 0); $("#memoryGauge").style.setProperty("--value", `${memoryUsage * 3.6}deg`);
-  $("#memoryBar").style.width = `${memoryUsage}%`; $("#memoryUsed").textContent = bytes(data.memory.used); $("#memoryFree").textContent = bytes(data.memory.available);
+  $("#memoryUsed").textContent = bytes(data.memory.used); $("#memoryFree").textContent = bytes(data.memory.available);
   $("#memoryTotal").textContent = `of ${bytes(data.memory.total)} total`;
+  const memoryTemperature = $("#memoryTemperature");
+  memoryTemperature.textContent = data.memory.temperature ? `Temperature ${number(data.memory.temperature.celsius, 1)} °C` : "";
+  memoryTemperature.title = data.memory.temperature ? `${data.memory.temperature.label} · ${data.memory.temperature.source}` : "";
+  memoryTemperature.hidden = !data.memory.temperature;
   const memoryModules = data.memory.hardware?.modules || []; const memoryTypes = [...new Set(memoryModules.map((module) => module.type).filter(Boolean))];
   $("#memoryType").textContent = memoryModules.length
     ? `${memoryTypes.join("/") || "RAM"} · ${memoryModules.length} ${memoryModules.length === 1 ? "Module" : "Modules"}`

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <title>Systemarr</title>
-    <link rel="stylesheet" href="/styles.css?v=4" />
+    <link rel="stylesheet" href="/styles.css?v=5" />
   </head>
   <body>
     <div class="glow glow-a"></div><div class="glow glow-b"></div>
@@ -39,9 +39,8 @@
           <div class="card-heading"><div><span class="eyebrow">Memory</span><h2>RAM</h2></div><span id="memoryType" class="badge">Memory</span></div>
           <div class="memory-overview">
             <div id="memoryGauge" class="gauge memory-gauge"><div><strong id="memoryPercent">–</strong><small>%</small></div></div>
-            <div class="memory-summary"><div><span>Used</span><strong id="memoryUsed">–</strong><small id="memoryTotal">of – total</small></div><div><span>Available</span><strong id="memoryFree">–</strong></div></div>
+            <div class="memory-summary"><div><span>Used</span><strong id="memoryUsed">–</strong><small id="memoryTotal">of – total</small></div><div><span>Available</span><strong id="memoryFree">–</strong></div><span id="memoryTemperature" class="memory-temperature" hidden></span></div>
           </div>
-          <div class="bar"><i id="memoryBar"></i></div>
           <div id="memoryHardware" class="memory-hardware" hidden></div>
           <div id="swapRow" class="submetric"><span>Swap</span><strong id="swapValue">–</strong></div>
         </article>
@@ -80,6 +79,6 @@
       </section>
       <footer><span id="lastUpdated">No data yet</span><span>Systemarr</span></footer>
     </main>
-    <script src="/app.js?v=7" defer></script>
+    <script src="/app.js?v=8" defer></script>
   </body>
 </html>
