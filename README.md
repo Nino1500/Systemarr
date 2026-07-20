@@ -33,7 +33,7 @@ http://<ubuntu-host>:3010/system?embed=1
 
 Single-module iframe routes automatically use a compact layout without the Systemarr header. The CPU route adjusts its gauge, core grid, and chart to the available widget size and hides the chart only in very short iframes.
 
-The RAM card uses the same circular utilization gauge as the CPU card and shows used, total, available, and swap memory. It also displays the hottest detected DIMM temperature from `spd5118`, `jc42`, `peci-dimmtemp`, or an explicitly labelled memory sensor. When the host exposes module information through SMBIOS/DMI or EDAC, the card additionally shows the RAM manufacturer, part number, type, capacity, speed, and slot where available. Hardware fields that Linux does not expose are omitted instead of being guessed.
+The RAM card uses the same circular utilization gauge as the CPU card and shows used, total, available, and swap memory. On ZFS hosts, reclaimable ARC memory is counted as available in the same way as Glances, instead of appearing as application RAM usage. It also displays the hottest detected DIMM temperature from `spd5118`, `jc42`, `peci-dimmtemp`, or an explicitly labelled memory sensor. When the host exposes module information through SMBIOS/DMI or EDAC, the card additionally shows the RAM manufacturer, part number, type, capacity, speed, and slot where available. Hardware fields that Linux does not expose are omitted instead of being guessed.
 
 The `/ram` and `/storage` aliases are also available. `/overview` opens the complete dashboard.
 

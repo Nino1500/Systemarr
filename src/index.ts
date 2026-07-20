@@ -156,7 +156,11 @@ async function cpuMetrics() {
 }
 
 async function memoryMetrics() {
-  const [info, hardware] = await Promise.all([readText(join(procRoot, "meminfo")), memoryHardware()]);
+  const [info, hardware, arcStats] = await Promise.all([
+    readText(join(procRoot, "meminfo")),
+    memoryHardware(),
+    readText(join(procRoot, "spl", "kstat", "zfs", "arcstats")),
+  ]);
   if (!info) {
     const total = totalmem();
     const available = freemem();
@@ -168,7 +172,18 @@ async function memoryMetrics() {
     if (match) values.set(match[1], Number(match[2]) * 1024);
   }
   const total = values.get("MemTotal") ?? 0;
-  const available = values.get("MemAvailable") ?? values.get("MemFree") ?? 0;
+  const kernelAvailable = values.get("MemAvailable") ?? values.get("MemFree") ?? 0;
+  const zfsValues = new Map<string, number>();
+  for (const line of arcStats?.split("\n") ?? []) {
+    const match = line.trim().match(/^(\S+)\s+\d+\s+(\d+)$/);
+    if (match) zfsValues.set(match[1], Number(match[2]));
+  }
+  // Linux does not include the reclaimable part of ZFS ARC in MemAvailable.
+  // Match Glances by treating everything above ARC's configured minimum as available.
+  const arcSize = zfsValues.get("size") ?? 0;
+  const arcMinimum = zfsValues.get("c_min") ?? 0;
+  const reclaimableArc = Math.max(0, arcSize - arcMinimum);
+  const available = Math.min(total, kernelAvailable + reclaimableArc);
   const swapTotal = values.get("SwapTotal") ?? 0;
   const swapFree = values.get("SwapFree") ?? 0;
   return { total, used: total - available, available, usage: percentage(total - available, total), swapTotal, swapUsed: swapTotal - swapFree, hardware };
